@@ -51,6 +51,10 @@ Seqtk Examples
         seqtk sample -s100 read1.fq 10000 > sub1.fq
         seqtk sample -s100 read2.fq 10000 > sub2.fq
 
+* Subsample FASTQ files by coverage (genome size is necessary for calculations):
+
+		seqtk sample -c -g [GENOME_SIZE] reads.fq 10 > read_10x.fq
+
 * Trim low-quality bases from both ends using the Phred algorithm:
 
         seqtk trimfq in.fq > out.fq
