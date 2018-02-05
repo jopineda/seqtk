@@ -1024,29 +1024,66 @@ static void cpy_kseq(kseq_t *dst, const kseq_t *src)
 
 int stk_sample(int argc, char *argv[])
 {
-	int c, twopass = 0;
+	int c, twopass = 0, bycov = 0;
 	uint64_t i, num = 0, n_seqs = 0;
 	double frac = 0.;
 	gzFile fp;
 	kseq_t *seq;
 	krand_t *kr = 0;
+	long int gs = 0;
 
-	while ((c = getopt(argc, argv, "2s:")) >= 0)
+	while ((c = getopt(argc, argv, "2s:cg:")) >= 0)
 		if (c == 's') kr = kr_srand(atol(optarg));
 		else if (c == '2') twopass = 1;
+		else if (c == 'c') bycov = 1;
+		else if (c == 'g') gs = atol(optarg);
 
 	if (optind + 2 > argc) {
 		fprintf(stderr, "\n");
-		fprintf(stderr, "Usage:   seqtk sample [-2] [-s seed=11] <in.fa> <frac>|<number>\n\n");
+		fprintf(stderr, "Usage:   seqtk sample [-2] [-s seed=11] <in.fa> <frac>|<number>|<coverage>\n\n");
 		fprintf(stderr, "Options: -s INT       RNG seed [11]\n");
 		fprintf(stderr, "         -2           2-pass mode: twice as slow but with much reduced memory\n\n");
+		fprintf(stderr, "         -c           Coverage mode: downsample by coverage\n\n");
+		fprintf(stderr, "         -g INT       Genome size needed if coverage mode requested\n\n");
 		return 1;
 	}
-	frac = atof(argv[optind+1]);
-	if (frac > 1.) num = (uint64_t)(frac + .499), frac = 0.;
-	else if (twopass) {
-		fprintf(stderr, "[W::%s] when sampling a fraction, option -2 is ignored.", __func__);
-		twopass = 0;
+
+    // by coverage mode chosen, genome size must be given ...
+    if (bycov) {
+		assert ( gs > 0 );
+	}
+	if (gs > 0) {
+		bycov = 1;
+	}
+
+    // subsample the data by coverage
+	double cov;	
+	if (bycov) {
+		cov = atof(argv[optind+1]);
+		uint64_t sum = 0;
+		int n = 0;
+        fp = strcmp(argv[optind], "-")? gzopen(argv[optind], "r") : gzdopen(fileno(stdin), "r");
+        if (fp == 0) {
+            fprintf(stderr, "[E::%s] failed to open the input file/stream.\n", __func__);
+            return 1;
+        }
+		seq = kseq_init(fp);
+		while (kseq_read(seq) >= 0) {
+			sum += strlen(seq->seq.s) + 1; 	
+			n++;
+		}
+		double avg_len = sum/n;
+		//printf("AVG_LEN: %f", avg_len);
+		//printf("SUM: %" PRIu64 ",  NUM: %i" PRIu64 "\n", sum, n);
+		num = (uint64_t)(cov*gs)/avg_len;
+		//printf("NUM_READS: %" PRIu64 "\n", num);
+	} else {
+		frac = atof(argv[optind+1]);
+		if (frac > 1.) num = (uint64_t)(frac + .499), frac = 0.;
+		else if (twopass) {
+			fprintf(stderr, "[W::%s] when sampling a fraction, option -2 is ignored.", __func__);
+			twopass = 0;
+		}
 	}
 	if (kr == 0) kr = kr_srand(11);
 
